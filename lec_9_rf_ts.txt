@@ -1,0 +1,318 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Dec 11 17:25:56 2025
+
+@author: pathouli
+"""
+
+#pip install numpy pandas scikit-learn matplotlib
+
+"""
+Synthetic Stock Data Generation - Creates realistic stock price data with trend and volatility
+Time Series Transformation - Converts time series to supervised learning with:
+
+5 lag features (previous days' prices)
+Rolling mean and standard deviation
+Price change features
+
+
+Walk-Forward Validation - Proper train/test split maintaining temporal order (80/20 split)
+Random Forest Model - Trains with optimized hyperparameters
+Comprehensive Evaluation - Calculates MAE, RMSE, and R² for both training and test sets
+Feature Importance Analysis - Shows which features matter most
+Visualizations - Creates 4 plots:
+
+Full dataset: actual vs predicted
+Test set zoom-in
+Prediction errors
+Feature importance chart
+
+
+Future Prediction - Demonstrates one-step-ahead forecasting
+"""
+
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+
+# Set random seed for reproducibility
+np.random.seed(42)
+
+# ============================================================================
+# STEP 1: Generate Synthetic Stock Price Data
+# ============================================================================
+print("=" * 80)
+print("STEP 1: Generating Synthetic Stock Price Data")
+print("=" * 80)
+
+def generate_stock_data(n_days=252, initial_price=100):
+    """Generate synthetic stock price data with trend and volatility"""
+    dates = [datetime.now() - timedelta(days=n_days-i) for i in range(n_days)]
+    prices = [initial_price]
+    
+    for i in range(1, n_days):
+        # Add trend + random walk
+        change = np.random.normal(0.05, 2.5)  # Slight upward trend with volatility
+        new_price = prices[-1] + change
+        prices.append(max(50, new_price))  # Ensure price doesn't go below 50
+    
+    df = pd.DataFrame({
+        'Date': dates,
+        'Price': prices
+    })
+    return df
+
+# Generate data
+stock_df = generate_stock_data(n_days=252)
+print(f"\nGenerated {len(stock_df)} days of stock price data")
+print(f"Price range: ${stock_df['Price'].min():.2f} - ${stock_df['Price'].max():.2f}")
+print("\nFirst 5 rows:")
+print(stock_df.head())
+
+# ============================================================================
+# STEP 2: Transform Time Series to Supervised Learning Problem
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 2: Transforming Time Series to Supervised Learning")
+print("=" * 80)
+
+def create_lagged_features(df, n_lags=5):
+    """Create lagged features for time series forecasting"""
+    data = df.copy()
+    
+    # Create lag features
+    for i in range(1, n_lags + 1):
+        data[f'lag_{i}'] = data['Price'].shift(i)
+    
+    # Create additional features
+    data['rolling_mean_5'] = data['Price'].shift(1).rolling(window=5).mean()
+    data['rolling_std_5'] = data['Price'].shift(1).rolling(window=5).std()
+    data['price_change'] = data['Price'].shift(1) - data['Price'].shift(2)
+    
+    # Drop rows with NaN values
+    data = data.dropna()
+    
+    return data
+
+# Transform data
+n_lags = 5
+transformed_df = create_lagged_features(stock_df, n_lags=n_lags)
+
+print(f"\nCreated {n_lags} lag features + additional engineered features")
+print(f"Dataset shape after transformation: {transformed_df.shape}")
+print("\nFeature columns:")
+print(transformed_df.columns.tolist())
+print("\nSample transformed data:")
+print(transformed_df.head())
+
+# ============================================================================
+# STEP 3: Split Data (Walk-Forward Validation)
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 3: Splitting Data with Walk-Forward Validation")
+print("=" * 80)
+
+# Use 80% for training, 20% for testing (maintaining time order)
+train_size = int(len(transformed_df) * 0.8)
+train_df = transformed_df.iloc[:train_size]
+test_df = transformed_df.iloc[train_size:]
+
+# Prepare features and target
+feature_cols = [col for col in transformed_df.columns if col not in ['Date', 'Price']]
+X_train = train_df[feature_cols]
+y_train = train_df['Price']
+X_test = test_df[feature_cols]
+y_test = test_df['Price']
+
+print(f"Training set: {len(train_df)} samples")
+print(f"Test set: {len(test_df)} samples")
+print(f"Features used: {len(feature_cols)}")
+print(f"Feature names: {feature_cols}")
+
+# ============================================================================
+# STEP 4: Train Random Forest Model
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 4: Training Random Forest Regressor")
+print("=" * 80)
+
+# Initialize and train Random Forest
+rf_model = RandomForestRegressor(
+    n_estimators=100,      # Number of trees
+    max_depth=10,          # Maximum depth of trees
+    min_samples_split=5,   # Minimum samples to split a node
+    min_samples_leaf=2,    # Minimum samples at leaf node
+    random_state=42,
+    n_jobs=-1              # Use all CPU cores
+)
+
+print("Training Random Forest model...")
+rf_model.fit(X_train, y_train)
+print("✓ Training complete!")
+
+# ============================================================================
+# STEP 5: Make Predictions
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 5: Making Predictions")
+print("=" * 80)
+
+# Predict on training set
+train_predictions = rf_model.predict(X_train)
+
+# Predict on test set
+test_predictions = rf_model.predict(X_test)
+
+print(f"Generated {len(train_predictions)} training predictions")
+print(f"Generated {len(test_predictions)} test predictions")
+
+# ============================================================================
+# STEP 6: Evaluate Model Performance
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 6: Model Evaluation")
+print("=" * 80)
+
+# Calculate metrics for training set
+train_mae = mean_absolute_error(y_train, train_predictions)
+train_rmse = np.sqrt(mean_squared_error(y_train, train_predictions))
+train_r2 = r2_score(y_train, train_predictions)
+
+# Calculate metrics for test set
+test_mae = mean_absolute_error(y_test, test_predictions)
+test_rmse = np.sqrt(mean_squared_error(y_test, test_predictions))
+test_r2 = r2_score(y_test, test_predictions)
+
+print("\nTRAINING SET PERFORMANCE:")
+print(f"  MAE:  ${train_mae:.2f}")
+print(f"  RMSE: ${train_rmse:.2f}")
+print(f"  R²:   {train_r2:.4f}")
+
+print("\nTEST SET PERFORMANCE:")
+print(f"  MAE:  ${test_mae:.2f}")
+print(f"  RMSE: ${test_rmse:.2f}")
+print(f"  R²:   {test_r2:.4f}")
+
+# Feature importance
+feature_importance = pd.DataFrame({
+    'Feature': feature_cols,
+    'Importance': rf_model.feature_importances_
+}).sort_values('Importance', ascending=False)
+
+print("\nFEATURE IMPORTANCE:")
+print(feature_importance.to_string(index=False))
+
+# ============================================================================
+# STEP 7: Visualize Results
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 7: Creating Visualizations")
+print("=" * 80)
+
+# Create figure with subplots
+fig, axes = plt.subplots(2, 2, figsize=(15, 10))
+fig.suptitle('Random Forest Stock Price Forecasting Results', fontsize=16, fontweight='bold')
+
+# Plot 1: Actual vs Predicted (Full Dataset)
+ax1 = axes[0, 0]
+train_dates = train_df['Date'].values
+test_dates = test_df['Date'].values
+
+ax1.plot(train_dates, y_train.values, label='Actual (Train)', color='blue', linewidth=2)
+ax1.plot(train_dates, train_predictions, label='Predicted (Train)', color='lightblue', linewidth=1.5, alpha=0.7)
+ax1.plot(test_dates, y_test.values, label='Actual (Test)', color='green', linewidth=2)
+ax1.plot(test_dates, test_predictions, label='Predicted (Test)', color='lightgreen', linewidth=1.5, alpha=0.7)
+ax1.axvline(x=test_dates[0], color='red', linestyle='--', label='Train/Test Split', linewidth=2)
+ax1.set_xlabel('Date')
+ax1.set_ylabel('Stock Price ($)')
+ax1.set_title('Actual vs Predicted Stock Prices')
+ax1.legend()
+ax1.grid(True, alpha=0.3)
+
+# Plot 2: Test Set Predictions Only
+ax2 = axes[0, 1]
+ax2.plot(test_dates, y_test.values, label='Actual', color='green', linewidth=2, marker='o', markersize=4)
+ax2.plot(test_dates, test_predictions, label='Predicted', color='orange', linewidth=2, marker='s', markersize=4)
+ax2.set_xlabel('Date')
+ax2.set_ylabel('Stock Price ($)')
+ax2.set_title('Test Set: Actual vs Predicted')
+ax2.legend()
+ax2.grid(True, alpha=0.3)
+
+# Plot 3: Prediction Errors (Test Set)
+ax3 = axes[1, 0]
+errors = y_test.values - test_predictions
+ax3.bar(range(len(errors)), errors, color=['red' if e < 0 else 'green' for e in errors], alpha=0.6)
+ax3.axhline(y=0, color='black', linestyle='-', linewidth=1)
+ax3.set_xlabel('Test Sample Index')
+ax3.set_ylabel('Prediction Error ($)')
+ax3.set_title(f'Prediction Errors (Test Set)\nMAE: ${test_mae:.2f}, RMSE: ${test_rmse:.2f}')
+ax3.grid(True, alpha=0.3)
+
+# Plot 4: Feature Importance
+ax4 = axes[1, 1]
+top_features = feature_importance.head(8)
+ax4.barh(top_features['Feature'], top_features['Importance'], color='steelblue')
+ax4.set_xlabel('Importance')
+ax4.set_title('Top 8 Feature Importance')
+ax4.grid(True, alpha=0.3, axis='x')
+
+plt.tight_layout()
+plt.savefig('stock_rf_forecasting_results.png', dpi=300, bbox_inches='tight')
+print("\n✓ Visualization saved as 'stock_rf_forecasting_results.png'")
+
+# ============================================================================
+# STEP 8: Make Future Predictions (One-Step Ahead)
+# ============================================================================
+print("\n" + "=" * 80)
+print("STEP 8: Making Future Predictions")
+print("=" * 80)
+
+# Get the last available data point
+last_data = transformed_df.iloc[-1:][feature_cols]
+next_day_prediction = rf_model.predict(last_data)[0]
+
+print(f"\nLast known price: ${transformed_df.iloc[-1]['Price']:.2f}")
+print(f"Next day prediction: ${next_day_prediction:.2f}")
+print(f"Predicted change: ${next_day_prediction - transformed_df.iloc[-1]['Price']:.2f}")
+
+# ============================================================================
+# Summary and Key Takeaways
+# ============================================================================
+print("\n" + "=" * 80)
+print("KEY TAKEAWAYS")
+print("=" * 80)
+print("""
+1. Time Series Transformation:
+   - Converted time series into supervised learning problem using lag features
+   - Created 5 lag variables + additional engineered features
+   
+2. Walk-Forward Validation:
+   - Maintained temporal order in train/test split
+   - 80% training, 20% testing
+   
+3. Model Performance:
+   - Test R² score indicates model's predictive power
+   - Lower RMSE/MAE on test set compared to training suggests good generalization
+   
+4. Important Features:
+   - Recent lags (lag_1, lag_2) typically most important
+   - Rolling statistics capture short-term trends
+   
+5. Limitations:
+   - Cannot extrapolate beyond training data range
+   - Requires frequent retraining with new data
+   - Best for short-term predictions (1-5 days ahead)
+   
+6. Production Use:
+   - Retrain model daily/weekly as new data arrives
+   - Combine with other models for ensemble approach
+   - Monitor performance metrics over time
+""")
+
+print("=" * 80)
+print("COMPLETE!")
+print("=" * 80)
