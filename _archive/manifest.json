@@ -9,7 +9,8 @@
   {
     "path": "IMDB Dataset.csv",
     "bytes": 66212309,
-    "storage": "release",
+    "storage": "external",
+    "source_path": "E:\\课程数据归档\\20261023\\english class\\IMDB Dataset.csv",
     "sha256": "dfc447764f82be365fa9c2beef4e8df89d3919e3da95f5088004797d79695aa2",
     "mtime_ns": 1571484298000000000
   },
@@ -37,7 +38,8 @@
   {
     "path": "project\\IMDB Dataset.csv",
     "bytes": 66212309,
-    "storage": "release",
+    "storage": "external",
+    "source_path": "E:\\课程数据归档\\20261023\\english class\\project\\IMDB Dataset.csv",
     "sha256": "dfc447764f82be365fa9c2beef4e8df89d3919e3da95f5088004797d79695aa2",
     "mtime_ns": 1571484298000000000
   },
